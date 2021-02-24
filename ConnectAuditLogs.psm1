@@ -1,54 +1,115 @@
-Class OnlineManagementApi { 
 
-    #Initialise the client variables for connecting to the API and getting the token.
-    [string]$ClientID
-    [string]$ClientSecret
-    [string]$loginURL
-    [string]$tenantdomain
-    [string]$TenantGUID
-    [string]$resource
-    [string]$check_Subscription;
-    [hashtable]$headerParams; 
-    [object]$contentType;
-    [object]$logsFiltered;
+#Gets a token from the environment.
+function getOffice365Token
+{
+    param(
+        [Parameter(Mandatory=$true, Position=0)]
+        [string]$resource,
+        [Parameter(Mandatory=$true, Position=1)]
+        [string]$client_ID,
+        [Parameter(Mandatory=$true, Position=2)]
+        [string]$client_secret,
+        [Parameter(Mandatory=$true, Position=3)]
+        [string]$loginUrl,
+        [Parameter(Mandatory=$true, Position=4)]
+        [string]$tenantdomain
+    )
 
-    #Gets the token to connect to the online management api. 
-    [void]getToken() {
-        $body = @{grant_type="client_credentials";resource=$this.resource;client_id=$this.ClientID;client_secret=$this.ClientSecret}
-        $postString = -join($this.loginURL,"/",$this.tenantdomain,"/oauth2/token?api-version=1.0");
-        $oauth = Invoke-RestMethod -Method Post -Uri $postString -Body $body
-        $this.headerParams = @{'Authorization'="$($oauth.token_type) $($oauth.access_token)"}
-    }
+    $body = @{grant_type="client_credentials";resource=$resource;client_id=$ClientID;client_secret=$ClientSecret}
+    $postString = -join($loginURL,"/",$tenantdomain,"/oauth2/token?api-version=1.0");
+    $oauth = Invoke-RestMethod -Method Post -Uri $postString -Body $body
+    $headerParams = @{'Authorization'="$($oauth.token_type) $($oauth.access_token)"}
 
-    #Checks if the subscription exists
-    [void]checkSubscriptions() {
-        $getSubscriptionsString = -join($this.resource,"/api/v1.0/",$this.tenantGUID,"/activity/feed/subscriptions/list");
-        $this.check_Subscription = Invoke-WebRequest -Headers $this.headerParams -Uri $getSubscriptionsString
-    }
+    return $headerParams;
+}
 
-    #start a subscription to a service such as Audit.General. 
-    [void]startSubscription([string]$subscription) {
-        $startSubscriptionString = -join($this.resource,"/api/v1.0/",$this.tenantGUID,"/activity/feed/subscriptions/start?contentType=",$subscription);
-        Invoke-WebRequest -Method Post -Headers $this.headerParams -Uri $startSubscriptionString;
-    }
+
+
+#Checks if the subscription exists
+function checkOffice365Subscriptions 
+{
+    param(
+        [Parameter(Mandatory=$true, Position=0)]
+        [string]$resource,
+        [Parameter(Mandatory=$true, Position=1)]
+        [string]$TenantGUID,
+        [Parameter(Mandatory=$true, Position=2)]
+        [hashtable]$headerParams
+    )
+
+        $getSubscriptionsString = -join($resource,"/api/v1.0/",$tenantGUID,"/activity/feed/subscriptions/list");
+        $check_Subscription = Invoke-WebRequest -Headers $headerParams -Uri $getSubscriptionsString
+
+        return $check_Subscription;
+}
+
+
+#start a subscription to a service such as Audit.General. 
+function startOffice365Subscription
+{
+    param(
+        [Parameter(Mandatory=$true, Position=0)]
+        [string]$resource,
+        [Parameter(Mandatory=$true, Position=1)]
+        [string]$TenantGUID,
+        [Parameter(Mandatory=$true, Position=2)]
+        [hashtable]$headerParams,
+        [Parameter(Mandatory=$true, Position=3)]
+        $subscription
+    )
+
+        $startSubscriptionString = -join($resource,"/api/v1.0/",$tenantGUID,"/activity/feed/subscriptions/start?contentType=",$subscription);
+        Invoke-WebRequest -Method Post -Headers $headerParams -Uri $startSubscriptionString;
+}
+
 
     #gets the unique code from the content blob for reading. 
-    [void]getContentTypeFromSubscription([string]$subscription) {
-        $contentString = -join($this.resource,"/api/v1.0/",$this.tenantGUID,"/activity/feed/subscriptions/content?contentType=",$subscription);
-        $this.contentType = Invoke-WebRequest -Headers $this.headerParams -Uri $contentString;
-        $this.contentType = $this.contentType.Content | ConvertFrom-Json;
+function getOffice365ContentTypeFromSubscription
+{   
+     param(
+        [Parameter(Mandatory=$true, Position=0)]
+        [string]$resource,
+        [Parameter(Mandatory=$true, Position=1)]
+        [string]$TenantGUID,
+        [Parameter(Mandatory=$true, Position=2)]
+        [hashtable]$headerParams,
+        [Parameter(Mandatory=$true, Position=3)]
+        $subscription
+    )
+        $contentString = -join($resource,"/api/v1.0/",$tenantGUID,"/activity/feed/subscriptions/content?contentType=",$subscription);
+        $contentType = Invoke-WebRequest -Headers $headerParams -Uri $contentString;
+        $contentType = $contentType.Content | ConvertFrom-Json;
         #Retreives the latest date of all the blobs 
-        $blobDates = $this.contentType
+        $blobDates = $contentType
         $sortBlobDate = $blobDates | Sort-Object {[DateTime]$_."contentCreated"}
-        $this.contentType = $sortBlobDate |  Select-Object -Last 1;
-    }
+        $contentType = $sortBlobDate |  Select-Object -Last 1;
 
-    #actually gets the content from the chosen blob. Takes in the chosen workload for filtering. 
-    [void]getLogsFromContent([string]$workload) {
-        $contentString = -join($this.resource,"/api/v1.0/",$this.tenantGUID,"/activity/feed/audit/",$this.contentType.contentId);
-        $logContent = Invoke-WebRequest -Headers $this.headerParams -Uri $contentString;
+        return $contentType;
+}
+
+#actually gets the content from the chosen blob. Takes in the chosen workload for filtering. 
+function getOffice365LogsFromContent 
+{
+    param(
+        [Parameter(Mandatory=$true, Position=0)]
+        [string]$resource,
+        [Parameter(Mandatory=$true, Position=1)]
+        [string]$TenantGUID,
+        [Parameter(Mandatory=$true, Position=2)]
+        [hashtable]$headerParams,
+        [Parameter(Mandatory=$true, Position=3)]
+        [string]$workload,
+        [Parameter(Mandatory=$true, Position=4)]
+        [object]$contentType
+    )
+        $contentString = -join($resource,"/api/v1.0/",$tenantGUID,"/activity/feed/audit/",$contentType.contentId);
+        $logContent = Invoke-WebRequest -Headers $headerParams -Uri $contentString;
+
         #Convers the log output from json to object so it can be parsed easier.
         $logConvertFromJson = $logContent | ConvertFrom-Json;
-        $this.logsFiltered = $logConvertFromJson | where-object -Property Workload -EQ $workload;
-    }
+        $logsFiltered = $logConvertFromJson | where-object -Property Workload -EQ $workload;
+
+        return $logsFiltered;
 }
+
+Export-ModuleMember -Function '*'
