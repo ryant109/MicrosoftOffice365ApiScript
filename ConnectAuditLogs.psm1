@@ -25,6 +25,32 @@ function getOffice365Token
 
 
 
+#Gets a token from the environment.
+function getOffice365Token
+{
+    param(
+        [Parameter(Mandatory=$true, Position=0)]
+        [string]$resource,
+        [Parameter(Mandatory=$true, Position=1)]
+        [string]$client_ID,
+        [Parameter(Mandatory=$true, Position=2)]
+        [string]$client_secret,
+        [Parameter(Mandatory=$true, Position=3)]
+        [string]$loginUrl,
+        [Parameter(Mandatory=$true, Position=4)]
+        [string]$tenantdomain
+    )
+
+    $body = @{grant_type="client_credentials";resource=$resource;client_id=$ClientID;client_secret=$ClientSecret}
+    $postString = -join($loginURL,"/",$tenantdomain,"/oauth2/token?api-version=1.0");
+    $oauth = Invoke-RestMethod -Method Post -Uri $postString -Body $body
+    $headerParams = @{'Authorization'="$($oauth.token_type) $($oauth.access_token)"}
+
+    return $headerParams;
+}
+
+
+
 #Checks if the subscription exists
 function checkOffice365Subscriptions 
 {
@@ -32,7 +58,7 @@ function checkOffice365Subscriptions
         [Parameter(Mandatory=$true, Position=0)]
         [string]$resource,
         [Parameter(Mandatory=$true, Position=1)]
-        [string]$TenantGUID,
+        [string]$tenantGUID,
         [Parameter(Mandatory=$true, Position=2)]
         [hashtable]$headerParams
     )
@@ -51,7 +77,7 @@ function startOffice365Subscription
         [Parameter(Mandatory=$true, Position=0)]
         [string]$resource,
         [Parameter(Mandatory=$true, Position=1)]
-        [string]$TenantGUID,
+        [string]$tenantGUID,
         [Parameter(Mandatory=$true, Position=2)]
         [hashtable]$headerParams,
         [Parameter(Mandatory=$true, Position=3)]
@@ -70,21 +96,23 @@ function getOffice365ContentTypeFromSubscription
         [Parameter(Mandatory=$true, Position=0)]
         [string]$resource,
         [Parameter(Mandatory=$true, Position=1)]
-        [string]$TenantGUID,
+        [string]$tenantGUID,
         [Parameter(Mandatory=$true, Position=2)]
         [hashtable]$headerParams,
         [Parameter(Mandatory=$true, Position=3)]
-        $subscription
+        [string]$subscription
     )
-        $contentString = -join($resource,"/api/v1.0/",$tenantGUID,"/activity/feed/subscriptions/content?contentType=",$subscription);
-        $contentType = Invoke-WebRequest -Headers $headerParams -Uri $contentString;
-        $contentType = $contentType.Content | ConvertFrom-Json;
-        #Retreives the latest date of all the blobs 
-        $blobDates = $contentType
-        $sortBlobDate = $blobDates | Sort-Object {[DateTime]$_."contentCreated"}
-        $contentType = $sortBlobDate |  Select-Object -Last 1;
+    $contentString = -join($resource,"/api/v1.0/",$tenantGUID,"/activity/feed/subscriptions/content?contentType=",$subscription);
+    $contentType = Invoke-WebRequest -Headers $headerParams -Uri $contentString;
+    $contentType = $contentType.Content | ConvertFrom-Json;
+   
+    #Retreives the latest date of all the blobs 
+    $blobDates = $contentType;
+    $sortBlobDate = $blobDates | Sort-Object {[DateTime]$_."contentCreated"}
+    $contentType = $sortBlobDate |  Select-Object -Last 1;
 
-        return $contentType;
+    
+    return $contentType;
 }
 
 #actually gets the content from the chosen blob. Takes in the chosen workload for filtering. 
